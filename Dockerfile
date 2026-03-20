@@ -8,22 +8,21 @@ LABEL maintainer="suman99pro"
 LABEL description="VulnScope — Vulnerability Intelligence Platform"
 LABEL version="2.5.0"
 
+# Create non-root user first
+RUN addgroup -S vulnscope && adduser -S vulnscope -G vulnscope
+
 # Remove default nginx static assets
 RUN rm -rf /usr/share/nginx/html/*
 
-# Copy app
+# Copy app and config
 COPY index.html /usr/share/nginx/html/index.html
+COPY nginx.conf /home/vulnscope/nginx.conf
 
-# Custom nginx config — security headers + gzip
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Non-root user for security
-RUN addgroup -S vulnscope && adduser -S vulnscope -G vulnscope \
-    && chown -R vulnscope:vulnscope /usr/share/nginx/html \
-    && chown -R vulnscope:vulnscope /var/cache/nginx \
+# Fix permissions in one layer
+RUN chown -R vulnscope:vulnscope /var/cache/nginx \
     && chown -R vulnscope:vulnscope /var/log/nginx \
-    && touch /var/run/nginx.pid \
-    && chown -R vulnscope:vulnscope /var/run/nginx.pid
+    && chown -R vulnscope:vulnscope /usr/share/nginx/html \
+    && chown vulnscope:vulnscope /home/vulnscope/nginx.conf
 
 USER vulnscope
 
@@ -32,4 +31,5 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:8080/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+# Pass our config file directly — bypasses /etc/nginx/conf.d entirely
+CMD ["nginx", "-c", "/home/vulnscope/nginx.conf", "-g", "daemon off;"]
